@@ -100,6 +100,15 @@ class BeamProfileWidget(QWidget):
             if not data:
                 self.clear()
                 return
+            # Centroid/FFT analysis can run much faster than the display-only
+            # profile path. Reused decimated data should not trigger a
+            # pyqtgraph redraw on every analysis result.
+            old_key = None if not self._data else (
+                self._data.get("frame_id"), self._data.get("profile_timestamp_ns")
+            )
+            new_key = (data.get("frame_id"), data.get("profile_timestamp_ns"))
+            if old_key is not None and new_key == old_key:
+                return
             self._data = data
             self._refresh()
         except Exception:

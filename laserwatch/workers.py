@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import OrderedDict
 import logging
+import math
 import queue
 import threading
 
@@ -17,7 +18,7 @@ class AnalysisThread(QThread):
     result_ready = Signal(object)
     analysis_error = Signal(str)
 
-    def __init__(self, analyzer: BeamAnalyzer, parent=None):
+    def __init__(self, analyzer: BeamAnalyzer, parent=None, profile_hz: float = 5.0):
         super().__init__(parent)
         self.analyzer = analyzer
         self._q = queue.Queue(maxsize=1)
@@ -27,21 +28,30 @@ class AnalysisThread(QThread):
         self.frames_dropped = 0
         self.failures = 0
 
-        # Beam-profile data used to live only in BeamAnalyzer._last_profile.
-        # The GUI receives BeamResult asynchronously, so the analysis thread can
-        # already be processing a newer frame by the time CameraPanel asks for
-        # the matching profile. With multiple cameras the GUI event queue is
-        # busier and that race becomes much easier to hit. Keep a small
-        # per-analysis-thread frame-id cache so each BeamResult can retrieve the
-        # profile generated from the same frame even after newer analysis starts.
+        # Beam centroid/size/pointing remains the high-rate analysis path.
+        # Cross-section generation is display-only and is intentionally
+        # decimated so it cannot unnecessarily reduce the FFT bandwidth.
+        hz = float(profile_hz)
+        self.profile_hz = hz if math.isfinite(hz) and hz > 0.0 else 5.0
+        self._profile_interval_ns = max(1, int(round(1e9 / self.profile_hz)))
+        self._last_profile_timestamp_ns = None
+        self._last_processed_frame_id = None
+
+        # BeamAnalyzer currently builds the profile inside analyze(). Save its
+        # builder so skipped profile frames can bypass only that display-only
+        # step while preserving the established analyze() API and all centroid,
+        # D4sigma, exposure and quality calculations. Each BeamAnalyzer belongs
+        # to exactly one AnalysisThread, so this temporary per-instance override
+        # is not shared between cameras.
+        self._profile_builder = getattr(analyzer, "_cache_cross_sections", None)
+
+        # Keep a few generated profiles per camera so a busy GUI can display the
+        # newest profile at or before a BeamResult's frame id.
         self._profile_cache = OrderedDict()
         self._profile_cache_lock = threading.RLock()
         self._profile_cache_limit = 16
         self._original_get_last_profile = getattr(analyzer, "get_last_profile", None)
         if callable(self._original_get_last_profile):
-            # CameraPanel already calls analyzer.get_last_profile(frame_id), so
-            # route that existing API through the stable frame-id cache without
-            # widening the GUI signal or changing CameraPanel's public behavior.
             analyzer.get_last_profile = self.get_profile_for_frame
 
     @property
@@ -81,7 +91,30 @@ class AnalysisThread(QThread):
             except Exception:
                 pass
 
-    def _cache_profile_for_frame(self, frame_id: int):
+    def _profile_due(self, timestamp_ns: int) -> bool:
+        """Return True at approximately ``profile_hz`` using capture time."""
+        ts = int(timestamp_ns)
+        last = self._last_profile_timestamp_ns
+        if last is None or ts <= last or ts - last >= self._profile_interval_ns:
+            self._last_profile_timestamp_ns = ts
+            return True
+        return False
+
+    def _analyze_frame(self, frame, ts, frame_id, compute_profile: bool):
+        builder = self._profile_builder
+        if compute_profile or not callable(builder):
+            return self.analyzer.analyze(frame, ts, frame_id)
+
+        # Skip only BeamAnalyzer._cache_cross_sections for this frame. The main
+        # analysis path remains unchanged. Always restore the bound method even
+        # if analysis raises.
+        self.analyzer._cache_cross_sections = lambda *_args, **_kwargs: None
+        try:
+            return self.analyzer.analyze(frame, ts, frame_id)
+        finally:
+            self.analyzer._cache_cross_sections = builder
+
+    def _cache_profile_for_frame(self, frame_id: int, timestamp_ns: int = 0):
         getter = self._original_get_last_profile
         if not callable(getter):
             return
@@ -94,35 +127,44 @@ class AnalysisThread(QThread):
             return
 
         fid = int(frame_id)
+        data = dict(data)
+        data["profile_timestamp_ns"] = int(timestamp_ns)
         with self._profile_cache_lock:
             self._profile_cache[fid] = data
             self._profile_cache.move_to_end(fid)
             while len(self._profile_cache) > self._profile_cache_limit:
                 self._profile_cache.popitem(last=False)
 
-    def get_profile_for_frame(self, frame_id=None):
-        """Return the profile associated with exactly ``frame_id``.
+    def _clear_profile_cache(self):
+        with self._profile_cache_lock:
+            self._profile_cache.clear()
+        self._last_profile_timestamp_ns = None
 
-        Matching entries are consumed after the GUI reads them. A bounded cache
-        also handles a short GUI backlog safely without retaining unbounded image
-        profile arrays.
+    def get_profile_for_frame(self, frame_id=None):
+        """Return the newest generated profile no newer than ``frame_id``.
+
+        Profile generation runs at a lower rate than centroid analysis. Results
+        between profile updates reuse the last completed profile; BeamProfileWidget
+        ignores the repeated profile key, so pyqtgraph redraws only at profile_hz.
         """
         data = None
         with self._profile_cache_lock:
-            if frame_id is None:
-                if self._profile_cache:
+            if self._profile_cache:
+                if frame_id is None:
                     _, data = next(reversed(self._profile_cache.items()))
-            else:
-                try:
-                    data = self._profile_cache.pop(int(frame_id), None)
-                except Exception:
-                    data = None
+                else:
+                    try:
+                        fid = int(frame_id)
+                        for cached_fid, cached_data in reversed(self._profile_cache.items()):
+                            if cached_fid <= fid:
+                                data = cached_data
+                                break
+                    except Exception:
+                        data = None
 
         if data is not None:
             return dict(data)
 
-        # Fallback keeps the original BeamAnalyzer API semantics for callers
-        # outside the normal result-delivery path.
         getter = self._original_get_last_profile
         if callable(getter):
             try:
@@ -130,6 +172,13 @@ class AnalysisThread(QThread):
             except Exception:
                 log.exception("Beam profile lookup failed for frame %s", frame_id)
         return None
+
+    @staticmethod
+    def _result_has_valid_position(result) -> bool:
+        try:
+            return math.isfinite(float(result.cx_um)) and math.isfinite(float(result.cy_um))
+        except Exception:
+            return True
 
     def run(self):
         self._running = True
@@ -143,10 +192,25 @@ class AnalysisThread(QThread):
                     break
                 frame, ts, frame_id = item
                 try:
-                    result = self.analyzer.analyze(frame, ts, frame_id)
-                    # Snapshot the matching cross section before analyze() can
-                    # start another frame and replace BeamAnalyzer._last_profile.
-                    self._cache_profile_for_frame(frame_id)
+                    fid = int(frame_id)
+                    if (
+                        self._last_processed_frame_id is not None
+                        and fid <= self._last_processed_frame_id
+                    ):
+                        # Camera restart / frame-counter reset: do not reuse a
+                        # profile from the previous acquisition run.
+                        self._clear_profile_cache()
+                    self._last_processed_frame_id = fid
+
+                    compute_profile = self._profile_due(ts)
+                    result = self._analyze_frame(frame, ts, frame_id, compute_profile)
+                    if self._result_has_valid_position(result):
+                        if compute_profile:
+                            self._cache_profile_for_frame(frame_id, ts)
+                    else:
+                        # Do not leave an old cross section on screen after beam
+                        # loss. The next valid frame immediately earns a profile.
+                        self._clear_profile_cache()
                     self.frames_processed += 1
                     self.result_ready.emit(result)
                 except Exception as exc:
