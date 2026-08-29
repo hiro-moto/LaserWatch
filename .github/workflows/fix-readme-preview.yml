@@ -18,45 +18,76 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Extract 256px icon and save verified JPEG
+      - name: Extract embedded 256px PNG and save verified JPEG
         shell: powershell
         run: |
           Add-Type -AssemblyName System.Drawing
-          $iconPath = (Resolve-Path 'assets/icon.ico').Path
+          $icoPath = (Resolve-Path 'assets/icon.ico').Path
           $outPath = Join-Path (Get-Location) 'docs/icon_preview.jpg'
+          $framePath = Join-Path (Get-Location) 'docs/.icon-frame.png'
+          $bytes = [System.IO.File]::ReadAllBytes($icoPath)
+          $count = [BitConverter]::ToUInt16($bytes, 4)
+          $best = $null
 
-          $icon = [System.Drawing.Icon]::new($iconPath, 256, 256)
-          try {
-            if ($icon.Width -ne 256 -or $icon.Height -ne 256) {
-              throw "ICO decoder returned $($icon.Width)x$($icon.Height), expected 256x256"
+          for ($i = 0; $i -lt $count; $i++) {
+            $p = 6 + 16 * $i
+            $w = [int]$bytes[$p]
+            $h = [int]$bytes[$p + 1]
+            if ($w -eq 0) { $w = 256 }
+            if ($h -eq 0) { $h = 256 }
+            $size = [BitConverter]::ToUInt32($bytes, $p + 8)
+            $offset = [BitConverter]::ToUInt32($bytes, $p + 12)
+            Write-Host "ICO frame $i`: ${w}x${h}, bytes=$size, offset=$offset"
+            if ($null -eq $best -or ($w * $h) -gt ($best.W * $best.H)) {
+              $best = [pscustomobject]@{ W=$w; H=$h; Size=$size; Offset=$offset }
             }
-            $bitmap = $icon.ToBitmap()
+          }
+
+          if ($best.W -ne 256 -or $best.H -ne 256) {
+            throw "Largest ICO frame is $($best.W)x$($best.H), expected 256x256"
+          }
+
+          $frame = New-Object byte[] ([int]$best.Size)
+          [Array]::Copy($bytes, [int]$best.Offset, $frame, 0, [int]$best.Size)
+          $pngSignature = [byte[]](137,80,78,71,13,10,26,10)
+          for ($i = 0; $i -lt 8; $i++) {
+            if ($frame[$i] -ne $pngSignature[$i]) { throw '256px ICO frame is not an embedded PNG' }
+          }
+          [System.IO.File]::WriteAllBytes($framePath, $frame)
+
+          $source = [System.Drawing.Image]::FromFile($framePath)
+          try {
+            if ($source.Width -ne 256 -or $source.Height -ne 256) {
+              throw "Extracted PNG verification failed: $($source.Width)x$($source.Height)"
+            }
+            $bitmap = New-Object System.Drawing.Bitmap 256, 256
             try {
+              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+              try {
+                $graphics.Clear([System.Drawing.Color]::Black)
+                $graphics.DrawImage($source, 0, 0, 256, 256)
+              }
+              finally { $graphics.Dispose() }
               $bitmap.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
             }
-            finally {
-              $bitmap.Dispose()
-            }
+            finally { $bitmap.Dispose() }
           }
-          finally {
-            $icon.Dispose()
-          }
+          finally { $source.Dispose() }
 
           $check = [System.Drawing.Image]::FromFile($outPath)
           try {
             if ($check.Width -ne 256 -or $check.Height -ne 256) {
               throw "JPEG verification failed: $($check.Width)x$($check.Height)"
             }
-            Write-Host "Verified JPEG: $($check.Width)x$($check.Height), format=$($check.RawFormat.Guid)"
+            Write-Host "Verified JPEG: $($check.Width)x$($check.Height)"
           }
-          finally {
-            $check.Dispose()
-          }
+          finally { $check.Dispose() }
           Get-FileHash $outPath -Algorithm SHA256
 
-      - name: Remove temporary transfer files
+      - name: Remove temporary files
         shell: powershell
         run: |
+          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/.icon-frame.png'
           Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview.jpg.b64'
           Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview_test_tmp.txt'
           Remove-Item -Force -ErrorAction SilentlyContinue 'docs/.icon-part-*'
