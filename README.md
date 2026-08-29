@@ -5,7 +5,7 @@ pointing monitoring, and long-term stability logging.
 
 Current development release: **v0.8.5**
 
-<img src="docs/icon_preview.jpg" alt="LaserWatch app icon" width="256">
+<img src="docs/icon_preview.jpg" alt="LaserWatch app icon">
 
 The application, packaged `.exe`, Start Menu shortcut, and desktop shortcut are configured to use this icon.
 
