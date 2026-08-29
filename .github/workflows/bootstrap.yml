@@ -1,0 +1,46 @@
+name: Bootstrap LaserWatch source
+
+on:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    if: ${{ github.actor != 'github-actions[bot]' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Expand verified source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cat .bootstrap/part00 \
+              .bootstrap/part01 \
+              .bootstrap/part02 \
+              .bootstrap/part03 \
+              .bootstrap/part04 \
+              .bootstrap/part05a \
+              .bootstrap/part05b \
+              .bootstrap/part06a > source-bootstrap.b64
+
+          base64 --decode source-bootstrap.b64 > source-bootstrap.tar.gz
+          echo "37b9709d4c129e6f35c8d3cb8953b66c844afface55e7f5e0808184d77b6afc8  source-bootstrap.tar.gz" | sha256sum -c -
+
+          tar -xzf source-bootstrap.tar.gz
+
+          rm -f source-bootstrap.b64 source-bootstrap.tar.gz
+          rm -rf .bootstrap
+          rm -f .github/workflows/bootstrap.yml
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -A
+          git commit -m "Populate LaserWatch v0.8.4 source"
+          git push origin HEAD:main
