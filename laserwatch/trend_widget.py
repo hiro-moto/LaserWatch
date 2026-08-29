@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import logging
-import math
-import numpy as np
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -78,15 +76,17 @@ class TrendWidget(QWidget):
         self.int_curve = self.intensity_plot.plot(name="Integrated")
         self.tabs.addTab(self.intensity_plot, "Intensity")
 
-        self.psd_plot = pg.PlotWidget()
-        self.psd_plot.setLabel("bottom", "Frequency", units="Hz")
-        self.psd_plot.setLabel("left", "PSD", units="µm²/Hz")
-        self.psd_plot.showGrid(x=True, y=True, alpha=0.25)
-        self.psd_plot.addLegend()
-        self.psd_plot.setLogMode(x=True, y=True)
-        self.psd_x_curve = self.psd_plot.plot(name="X PSD")
-        self.psd_y_curve = self.psd_plot.plot(name="Y PSD")
-        self.tabs.addTab(self.psd_plot, "PSD")
+        self.fft_plot = pg.PlotWidget()
+        self.fft_plot.setLabel("bottom", "Frequency", units="Hz")
+        self.fft_plot.setLabel("left", "FFT amplitude", units="µm")
+        self.fft_plot.showGrid(x=True, y=True, alpha=0.25)
+        self.fft_plot.addLegend()
+        # Frequency is logarithmic for readability over a broad band. Amplitude
+        # stays linear so peaks retain the intuitive displacement unit [µm].
+        self.fft_plot.setLogMode(x=True, y=False)
+        self.fft_x_curve = self.fft_plot.plot(name="X FFT")
+        self.fft_y_curve = self.fft_plot.plot(name="Y FFT")
+        self.tabs.addTab(self.fft_plot, "FFT")
 
     def _new_plot(self, ylabel, units):
         plot = self.pg.PlotWidget()
@@ -151,8 +151,8 @@ class TrendWidget(QWidget):
                     self.d4x_curve,
                     self.d4y_curve,
                     self.int_curve,
-                    self.psd_x_curve,
-                    self.psd_y_curve,
+                    self.fft_x_curve,
+                    self.fft_y_curve,
                 ):
                     curve.setData([], [])
                 return
@@ -193,20 +193,16 @@ class TrendWidget(QWidget):
             self.d4y_curve.setData(td4y, d4y, connect="finite")
             self.int_curve.setData(ti, intensity, connect="finite")
 
-            psd = buffer.pointing_psd(self._window_s)
-            f = psd["f"]
-            if len(f) > 1:
-                self.psd_x_curve.setData(
-                    f[1:],
-                    psd["psd_x"][1:],
-                )
-                self.psd_y_curve.setData(
-                    f[1:],
-                    psd["psd_y"][1:],
-                )
+            fft = buffer.pointing_fft(self._window_s)
+            f = fft["f"]
+            if f:
+                # pointing_fft() deliberately omits f=0, so the FFT tab never
+                # shows the DC component even if a large pointing offset exists.
+                self.fft_x_curve.setData(f, fft["amp_x"])
+                self.fft_y_curve.setData(f, fft["amp_y"])
             else:
-                self.psd_x_curve.setData([], [])
-                self.psd_y_curve.setData([], [])
+                self.fft_x_curve.setData([], [])
+                self.fft_y_curve.setData([], [])
 
         except Exception:
-            log.exception("Trend/PSD plot update failed")
+            log.exception("Trend/FFT plot update failed")
