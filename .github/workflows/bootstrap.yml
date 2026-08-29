@@ -36,7 +36,7 @@ jobs:
 
           rm -f source-bootstrap.b64 source-bootstrap.tar.gz
           rm -rf .bootstrap
-          rm -f .github/workflows/bootstrap.yml
+          rm -f .github/workflows/windows-build.yml
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
