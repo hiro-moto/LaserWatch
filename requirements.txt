@@ -1,0 +1,10 @@
+PySide6>=6.7,<7
+opencv-python>=4.10,<5
+numpy>=2.0,<3
+scipy>=1.13,<2
+h5py>=3.11,<4
+psutil>=6.0,<8
+pyqtgraph>=0.13.7,<0.15
+pyinstaller>=6.10,<7
+pygrabber==0.2; platform_system=="Windows"
+comtypes>=1.4,<2; platform_system=="Windows"

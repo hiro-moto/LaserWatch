@@ -1,0 +1,42 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build outputs
+build/
+dist/
+*.spec.bak
+installer/output/
+
+# Runtime / generated data
+*.log
+logs/
+LaserWatchData/
+*.h5
+*.hdf5
+measurement.csv
+summary.csv
+summary.json
+report.html
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+~$*
