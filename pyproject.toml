@@ -1,6 +1,6 @@
 [project]
 name = "laserwatch"
-version = "0.8.4"
+version = "0.8.5"
 description = "Multi-camera UVC laser beam profiler, pointing monitor, and stability logger for Windows"
 readme = "README.md"
 license = "MIT"

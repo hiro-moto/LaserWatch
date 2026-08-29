@@ -2,11 +2,13 @@ from __future__ import annotations
 import logging
 import sys
 
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QApplication, QMessageBox
 
 from . import APP_NAME
 from .logging_setup import install_exception_hook, setup_logging
 from .main_window import MainWindow
+from .resources import app_icon_path
 
 log = logging.getLogger(__name__)
 
@@ -15,6 +17,10 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NAME)
     app.setOrganizationName("LaserWatch")
+    try:
+        app.setWindowIcon(QIcon(str(app_icon_path())))
+    except Exception:
+        log.exception("Failed to set application icon")
 
     log_path = setup_logging()
     install_exception_hook()

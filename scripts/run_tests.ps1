@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 
 $tests = @(
+    "test_icon_static.py",
     "test_uvc_math.py",
     "test_analysis.py",
     "test_v04.py",

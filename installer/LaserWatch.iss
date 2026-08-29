@@ -1,5 +1,5 @@
 #define MyAppName "LaserWatch"
-#define MyAppVersion "0.8.4"
+#define MyAppVersion "0.8.5"
 #define MyAppPublisher "Research Software"
 #define MyAppExeName "LaserWatch.exe"
 [Setup]
@@ -11,16 +11,18 @@ DefaultDirName={autopf}\LaserWatch
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=output
-OutputBaseFilename=LaserWatch_Setup_0.8.4
+OutputBaseFilename=LaserWatch_Setup_0.8.5
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+SetupIconFile=..\assets\icon.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
 Source: "..\dist\LaserWatch\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 [Icons]
-Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autoprograms}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\{#MyAppExeName}"
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon; IconFilename: "{app}\{#MyAppExeName}"
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional icons:"
 [Run]

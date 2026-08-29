@@ -4,7 +4,7 @@ a = Analysis(
     ['run.py'],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[('assets', 'assets')],
     hiddenimports=[
         'comtypes',
         'comtypes.client',
@@ -38,6 +38,7 @@ exe = EXE(
     strip=False,
     upx=True,
     console=False,
+    icon='assets/icon.ico',
 )
 
 coll = COLLECT(

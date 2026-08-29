@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.8.5
+
+- Added the selected LaserWatch application icon as `assets/icon.png` and multi-resolution `assets/icon.ico`.
+- Configured the Qt application/window icon, packaged `LaserWatch.exe`, Inno Setup installer, uninstall entry, Start Menu shortcut, and desktop shortcut to use the same icon.
+- Added the icon preview to the README.
+- Added runtime resource-path handling for source and PyInstaller builds.
+
 ## 0.8.4
 
 - Added click-to-select **Fixed target** mode.

@@ -2,6 +2,7 @@ from __future__ import annotations
 import logging
 
 from PySide6.QtCore import QSettings, QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget,
     QPushButton, QLabel, QComboBox
@@ -11,6 +12,7 @@ from .camera_panel import CameraPanel
 from .models import CameraDevice, CameraSettings
 from .windows_uvc import enumerate_video_devices, UVCUnavailable
 from .sync_monitor import compute_sync_status
+from .resources import app_icon_path
 
 log = logging.getLogger(__name__)
 
@@ -18,7 +20,11 @@ log = logging.getLogger(__name__)
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("LaserWatch 0.8.4")
+        self.setWindowTitle("LaserWatch 0.8.5")
+        try:
+            self.setWindowIcon(QIcon(str(app_icon_path())))
+        except Exception:
+            log.exception("Failed to set main-window icon")
         # Default is comfortable on Full-HD, but the window can now shrink
         # substantially on laptops because controls/plots no longer impose
         # a tall minimum size.
@@ -61,7 +67,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.tabs, 1)
 
         self.statusBar().showMessage(
-            "LaserWatch 0.8.4: click-to-select fixed beam target."
+            "LaserWatch 0.8.5: click-to-select fixed beam target."
         )
         self.refresh_devices()
 

@@ -55,4 +55,4 @@ if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed" }
 Write-Host ""
 Write-Host "Build complete"
 Write-Host "Portable app: dist\LaserWatch\LaserWatch.exe"
-Write-Host "Installer:    installer\output\LaserWatch_Setup_0.8.4.exe"
+Write-Host "Installer:    installer\output\LaserWatch_Setup_0.8.5.exe"
