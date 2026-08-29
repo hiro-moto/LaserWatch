@@ -12,49 +12,57 @@ permissions:
 
 jobs:
   regenerate-preview:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Decode and verify README JPEG
+      - name: Extract 256px icon and save verified JPEG
+        shell: powershell
         run: |
-          python -m pip install --quiet pillow
-          base64 --decode docs/icon_preview.jpg.b64 > docs/icon_preview.jpg
-          python - <<'PY'
-          from pathlib import Path
-          from PIL import Image
-          import hashlib
+          Add-Type -AssemblyName System.Drawing
+          $iconPath = (Resolve-Path 'assets/icon.ico').Path
+          $outPath = Join-Path (Get-Location) 'docs/icon_preview.jpg'
 
-          path = Path('docs/icon_preview.jpg')
-          data = path.read_bytes()
-          with Image.open(path) as image:
-              image.load()
-              assert image.format == 'JPEG', image.format
-              assert image.size == (320, 320), image.size
-              rgb = image.convert('RGB')
-              pixel_digest = hashlib.sha256(rgb.tobytes()).hexdigest()
-              assert pixel_digest == '092d996239d11ae8517f2960367304195081f9c17a655cd4caaed841b984438a', pixel_digest
-              print('JPEG format:', image.format)
-              print('JPEG size:', image.size)
-              print('JPEG mode:', image.mode)
-              print('Pixel SHA256:', pixel_digest)
+          $icon = [System.Drawing.Icon]::new($iconPath, 256, 256)
+          try {
+            if ($icon.Width -ne 256 -or $icon.Height -ne 256) {
+              throw "ICO decoder returned $($icon.Width)x$($icon.Height), expected 256x256"
+            }
+            $bitmap = $icon.ToBitmap()
+            try {
+              $bitmap.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
+            }
+            finally {
+              $bitmap.Dispose()
+            }
+          }
+          finally {
+            $icon.Dispose()
+          }
 
-          print('JPEG bytes:', len(data))
-          print('File SHA256:', hashlib.sha256(data).hexdigest())
-          PY
+          $check = [System.Drawing.Image]::FromFile($outPath)
+          try {
+            if ($check.Width -ne 256 -or $check.Height -ne 256) {
+              throw "JPEG verification failed: $($check.Width)x$($check.Height)"
+            }
+            Write-Host "Verified JPEG: $($check.Width)x$($check.Height), format=$($check.RawFormat.Guid)"
+          }
+          finally {
+            $check.Dispose()
+          }
+          Get-FileHash $outPath -Algorithm SHA256
 
-      - name: Remove temporary files
+      - name: Remove temporary transfer files
+        shell: powershell
         run: |
-          rm -f docs/icon_preview.jpg.b64
-          rm -f docs/icon_preview_test_tmp.txt
+          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview.jpg.b64'
+          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview_test_tmp.txt'
+          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/.icon-part-*'
 
       - name: Commit verified preview
+        shell: powershell
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
