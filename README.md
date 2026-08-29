@@ -7,7 +7,7 @@ Current development release: **v0.8.5**
 
 ![LaserWatch app icon](docs/icon_preview.png)
 
-The application, packaged `.exe`, installer, and desktop shortcut are all configured to use this icon.
+The application, packaged `.exe`, Start Menu shortcut, and desktop shortcut are configured to use this icon.
 
 > Status: research software under active hardware validation. The core analysis and
 > regression tests are automated, but camera controls, pixel formats, exposure behavior,
@@ -179,7 +179,7 @@ See [`docs/INSTALLER.md`](docs/INSTALLER.md) for details.
 
 It runs the regression suite, builds the PyInstaller application and Inno Setup installer, publishes the versioned Windows installer and portable ZIP to GitHub Releases, and also maintains stable `latest` asset names used by the direct-download links above.
 
-A release build starts when the version in `pyproject.toml` changes on `main`. It can also be started manually from **GitHub → Actions → Build and publish Windows release → Run workflow**.
+A release build starts when the version or release-packaging configuration changes on `main`. It can also be started manually from **GitHub → Actions → Build and publish Windows release → Run workflow**.
 
 For the next release, update the version in `pyproject.toml` and push to `main`.
 

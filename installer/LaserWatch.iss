@@ -16,7 +16,6 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
-SetupIconFile=..\assets\icon.ico
 UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
 Source: "..\dist\LaserWatch\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs

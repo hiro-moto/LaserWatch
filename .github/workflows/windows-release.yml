@@ -7,6 +7,10 @@ on:
     paths:
       - "pyproject.toml"
       - ".github/workflows/windows-release.yml"
+      - "installer/**"
+      - "LaserWatch.spec"
+      - "assets/**"
+      - "scripts/build_installer.ps1"
 
 permissions:
   contents: write
