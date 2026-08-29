@@ -13,7 +13,8 @@ $tests = @(
     "test_v082.py",
     "test_v082_static.py",
     "test_v083.py",
-    "test_v084.py"
+    "test_v084.py",
+    "test_v086.py"
 )
 
 foreach ($test in $tests) {
