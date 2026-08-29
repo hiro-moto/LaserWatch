@@ -13,6 +13,8 @@ assert 'app.setWindowIcon' in app
 assert 'self.setWindowIcon' in main
 assert "datas=[('assets', 'assets')]" in spec
 assert "icon='assets/icon.ico'" in spec
-assert r'SetupIconFile=..\assets\icon.ico' in iss
+assert 'SetupIconFile=' not in iss
+assert r'UninstallDisplayIcon={app}\{#MyAppExeName}' in iss
+assert r'IconFilename: "{app}\{#MyAppExeName}"' in iss
 assert 'docs/icon_preview.png' in readme
 print('icon integration static checks: PASS')

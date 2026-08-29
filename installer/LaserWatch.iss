@@ -16,6 +16,8 @@ Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
 ArchitecturesInstallIn64BitMode=x64compatible
+; SetupIconFile is intentionally omitted: the application icon is embedded in LaserWatch.exe
+; and used by the app/shortcuts, while Inno Setup rejects this ICO as a setup icon.
 UninstallDisplayIcon={app}\{#MyAppExeName}
 [Files]
 Source: "..\dist\LaserWatch\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
