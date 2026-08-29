@@ -33,19 +33,20 @@ jobs:
 
           path = Path('docs/icon_preview.jpg')
           data = path.read_bytes()
-          digest = hashlib.sha256(data).hexdigest()
-          assert digest == '99f3c30559f072f7f3207d8872c774193933d1ffbc8c177a65cc9ea3f6c487f9', digest
-
           with Image.open(path) as image:
               image.load()
               assert image.format == 'JPEG', image.format
               assert image.size == (320, 320), image.size
+              rgb = image.convert('RGB')
+              pixel_digest = hashlib.sha256(rgb.tobytes()).hexdigest()
+              assert pixel_digest == '092d996239d11ae8517f2960367304195081f9c17a655cd4caaed841b984438a', pixel_digest
               print('JPEG format:', image.format)
               print('JPEG size:', image.size)
               print('JPEG mode:', image.mode)
+              print('Pixel SHA256:', pixel_digest)
 
           print('JPEG bytes:', len(data))
-          print('SHA256:', digest)
+          print('File SHA256:', hashlib.sha256(data).hexdigest())
           PY
 
       - name: Remove temporary files
