@@ -1,0 +1,73 @@
+name: Fix README icon preview
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/fix-readme-preview.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate-preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Generate JPEG from largest ICO frame
+        run: |
+          python -m pip install --quiet pillow
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import hashlib
+
+          ico_path = Path('assets/icon.ico')
+          out_path = Path('docs/icon_preview.jpg')
+
+          with Image.open(ico_path) as ico:
+              if hasattr(ico, 'ico'):
+                  sizes = sorted(ico.ico.sizes(), key=lambda s: s[0] * s[1])
+                  chosen = sizes[-1]
+                  image = ico.ico.getimage(chosen)
+              else:
+                  chosen = ico.size
+                  image = ico.copy()
+
+          image = image.convert('RGB')
+          image.save(out_path, 'JPEG', quality=95, optimize=True, progressive=False)
+
+          with Image.open(out_path) as check:
+              check.load()
+              assert check.format == 'JPEG'
+              assert check.size[0] >= 256 and check.size[1] >= 256
+
+          data = out_path.read_bytes()
+          print('ICO frame:', chosen)
+          print('JPEG size:', Image.open(out_path).size)
+          print('JPEG bytes:', len(data))
+          print('SHA256:', hashlib.sha256(data).hexdigest())
+          PY
+
+      - name: Remove accidental temporary file
+        run: rm -f docs/icon_preview_test_tmp.txt
+
+      - name: Commit generated preview
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/icon_preview.jpg docs/icon_preview_test_tmp.txt
+          if git diff --cached --quiet; then
+            echo 'No changes to commit.'
+          else
+            git commit -m 'Regenerate README icon preview from 256px ICO'
+            git push
+          fi
