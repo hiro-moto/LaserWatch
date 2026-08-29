@@ -12,88 +12,50 @@ permissions:
 
 jobs:
   regenerate-preview:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Extract embedded 256px PNG and save verified JPEG
-        shell: powershell
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Reassemble and verify JPEG
         run: |
-          Add-Type -AssemblyName System.Drawing
-          $icoPath = (Resolve-Path 'assets/icon.ico').Path
-          $outPath = Join-Path (Get-Location) 'docs/icon_preview.jpg'
-          $framePath = Join-Path (Get-Location) 'docs/.icon-frame.png'
-          $bytes = [System.IO.File]::ReadAllBytes($icoPath)
-          $count = [BitConverter]::ToUInt16($bytes, 4)
-          $best = $null
+          python -m pip install --quiet pillow
+          cat docs/.icon-part-00 docs/.icon-part-01 docs/.icon-part-02 docs/.icon-part-03 docs/.icon-part-04 docs/.icon-part-05 > /tmp/icon.b64
+          base64 --decode /tmp/icon.b64 > docs/icon_preview.jpg
+          python - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import hashlib
 
-          for ($i = 0; $i -lt $count; $i++) {
-            $p = 6 + 16 * $i
-            $w = [int]$bytes[$p]
-            $h = [int]$bytes[$p + 1]
-            if ($w -eq 0) { $w = 256 }
-            if ($h -eq 0) { $h = 256 }
-            $size = [BitConverter]::ToUInt32($bytes, $p + 8)
-            $offset = [BitConverter]::ToUInt32($bytes, $p + 12)
-            Write-Host "ICO frame $i`: ${w}x${h}, bytes=$size, offset=$offset"
-            if ($null -eq $best -or ($w * $h) -gt ($best.W * $best.H)) {
-              $best = [pscustomobject]@{ W=$w; H=$h; Size=$size; Offset=$offset }
-            }
-          }
+          p = Path('docs/icon_preview.jpg')
+          data = p.read_bytes()
+          digest = hashlib.sha256(data).hexdigest()
+          expected = '3ab913646bc44653c3b642e809c5a40a4059dc0ff1ef793b0cd46a78b34a8ddb'
+          assert digest == expected, (digest, expected)
 
-          if ($best.W -ne 256 -or $best.H -ne 256) {
-            throw "Largest ICO frame is $($best.W)x$($best.H), expected 256x256"
-          }
+          with Image.open(p) as image:
+              image.load()
+              assert image.format == 'JPEG', image.format
+              assert image.size == (256, 256), image.size
+              assert image.mode == 'RGB', image.mode
+              print('Verified JPEG:', image.format, image.size, image.mode)
 
-          $frame = New-Object byte[] ([int]$best.Size)
-          [Array]::Copy($bytes, [int]$best.Offset, $frame, 0, [int]$best.Size)
-          $pngSignature = [byte[]](137,80,78,71,13,10,26,10)
-          for ($i = 0; $i -lt 8; $i++) {
-            if ($frame[$i] -ne $pngSignature[$i]) { throw '256px ICO frame is not an embedded PNG' }
-          }
-          [System.IO.File]::WriteAllBytes($framePath, $frame)
-
-          $source = [System.Drawing.Image]::FromFile($framePath)
-          try {
-            if ($source.Width -ne 256 -or $source.Height -ne 256) {
-              throw "Extracted PNG verification failed: $($source.Width)x$($source.Height)"
-            }
-            $bitmap = New-Object System.Drawing.Bitmap 256, 256
-            try {
-              $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-              try {
-                $graphics.Clear([System.Drawing.Color]::Black)
-                $graphics.DrawImage($source, 0, 0, 256, 256)
-              }
-              finally { $graphics.Dispose() }
-              $bitmap.Save($outPath, [System.Drawing.Imaging.ImageFormat]::Jpeg)
-            }
-            finally { $bitmap.Dispose() }
-          }
-          finally { $source.Dispose() }
-
-          $check = [System.Drawing.Image]::FromFile($outPath)
-          try {
-            if ($check.Width -ne 256 -or $check.Height -ne 256) {
-              throw "JPEG verification failed: $($check.Width)x$($check.Height)"
-            }
-            Write-Host "Verified JPEG: $($check.Width)x$($check.Height)"
-          }
-          finally { $check.Dispose() }
-          Get-FileHash $outPath -Algorithm SHA256
+          print('JPEG bytes:', len(data))
+          print('SHA256:', digest)
+          PY
 
       - name: Remove temporary files
-        shell: powershell
         run: |
-          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/.icon-frame.png'
-          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview.jpg.b64'
-          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/icon_preview_test_tmp.txt'
-          Remove-Item -Force -ErrorAction SilentlyContinue 'docs/.icon-part-*'
+          rm -f docs/icon_preview.jpg.b64
+          rm -f docs/icon_preview_test_tmp.txt
+          rm -f docs/.icon-part-*
 
       - name: Commit verified preview
-        shell: powershell
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
