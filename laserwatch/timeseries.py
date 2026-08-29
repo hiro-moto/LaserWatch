@@ -148,27 +148,32 @@ class TimeSeriesBuffer:
             "intensity_cv_percent": intensity_cv,
         }
 
-    def pointing_psd(self, window_s=None, max_points=8192):
-        points = self._window_points(window_s)
-        if len(points) < 16:
+    @staticmethod
+    def _empty_spectrum(kind="fft", sample_rate_hz=float("nan")):
+        if kind == "psd":
             return {
                 "f": [],
                 "psd_x": [],
                 "psd_y": [],
-                "sample_rate_hz": float("nan"),
+                "sample_rate_hz": sample_rate_hz,
             }
+        return {
+            "f": [],
+            "amp_x": [],
+            "amp_y": [],
+            "sample_rate_hz": sample_rate_hz,
+        }
 
-        # Do not interpolate through beam-loss/reacquisition gaps. PSD uses the
-        # latest contiguous valid segment.
+    def _uniform_latest_pointing(self, window_s=None, max_points=8192):
+        points = self._window_points(window_s)
+        if len(points) < 16:
+            return None
+
+        # Never interpolate across a beam-loss/reacquisition discontinuity.
         latest_segment = points[-1].segment
         points = [p for p in points if p.segment == latest_segment]
         if len(points) < 16:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": float("nan"),
-            }
+            return None
 
         t = np.asarray([p.t_s for p in points], dtype=np.float64)
         x = np.asarray([p.x_um for p in points], dtype=np.float64)
@@ -176,33 +181,18 @@ class TimeSeriesBuffer:
         mask = np.isfinite(t) & np.isfinite(x) & np.isfinite(y)
         t, x, y = t[mask], x[mask], y[mask]
         if len(t) < 16:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": float("nan"),
-            }
+            return None
 
         order = np.argsort(t)
         t, x, y = t[order], x[order], y[order]
         dt = np.diff(t)
         dt = dt[np.isfinite(dt) & (dt > 0)]
         if len(dt) < 8:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": float("nan"),
-            }
+            return None
 
         median_dt = float(np.median(dt))
         if not math.isfinite(median_dt) or median_dt <= 0:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": float("nan"),
-            }
+            return None
 
         n = int(round((t[-1] - t[0]) / median_dt)) + 1
         n = max(16, min(n, int(max_points)))
@@ -211,29 +201,73 @@ class TimeSeriesBuffer:
         yu = np.interp(tu, t, y)
         actual_dt = float((tu[-1] - tu[0]) / max(n - 1, 1))
         if actual_dt <= 0:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": float("nan"),
-            }
+            return None
 
-        fs = 1.0 / actual_dt
+        return tu, xu, yu, 1.0 / actual_dt
+
+    def pointing_fft(self, window_s=None, max_points=8192):
+        """One-sided pointing amplitude spectrum in micrometres.
+
+        Irregular host timestamps are resampled at the median interval using only
+        the latest contiguous valid segment. The mean is removed, a Hann window
+        is applied, amplitudes are corrected for the window's coherent gain, and
+        the DC bin (0 Hz) is omitted from the returned arrays.
+        """
+        uniform = self._uniform_latest_pointing(window_s, max_points=max_points)
+        if uniform is None:
+            return self._empty_spectrum("fft")
+
+        _, xu, yu, fs = uniform
+        n = len(xu)
+        xu = xu - np.mean(xu)
+        yu = yu - np.mean(yu)
+        window = np.hanning(n)
+        coherent_gain = float(np.sum(window))
+        if coherent_gain <= 0:
+            return self._empty_spectrum("fft", fs)
+
+        fx = np.fft.rfft(xu * window)
+        fy = np.fft.rfft(yu * window)
+        freq = np.fft.rfftfreq(n, d=1.0 / fs)
+        amp_x = np.abs(fx) / coherent_gain
+        amp_y = np.abs(fy) / coherent_gain
+
+        # Convert to a one-sided peak-amplitude spectrum. Nyquist (for even n)
+        # is not doubled; all other positive-frequency bins are.
+        if n > 2:
+            if n % 2 == 0:
+                amp_x[1:-1] *= 2.0
+                amp_y[1:-1] *= 2.0
+            else:
+                amp_x[1:] *= 2.0
+                amp_y[1:] *= 2.0
+
+        positive = freq > 0.0
+        return {
+            "f": freq[positive].tolist(),
+            "amp_x": amp_x[positive].tolist(),
+            "amp_y": amp_y[positive].tolist(),
+            "sample_rate_hz": fs,
+        }
+
+    def pointing_psd(self, window_s=None, max_points=8192):
+        """Legacy one-sided PSD calculation retained for API compatibility."""
+        uniform = self._uniform_latest_pointing(window_s, max_points=max_points)
+        if uniform is None:
+            return self._empty_spectrum("psd")
+
+        _, xu, yu, fs = uniform
+        n = len(xu)
         xu -= np.mean(xu)
         yu -= np.mean(yu)
         window = np.hanning(n)
         window_power = float(np.sum(window * window))
         if window_power <= 0:
-            return {
-                "f": [],
-                "psd_x": [],
-                "psd_y": [],
-                "sample_rate_hz": fs,
-            }
+            return self._empty_spectrum("psd", fs)
 
         fx = np.fft.rfft(xu * window)
         fy = np.fft.rfft(yu * window)
-        freq = np.fft.rfftfreq(n, d=actual_dt)
+        freq = np.fft.rfftfreq(n, d=1.0 / fs)
         psd_x = (np.abs(fx) ** 2) / (fs * window_power)
         psd_y = (np.abs(fy) ** 2) / (fs * window_power)
 
