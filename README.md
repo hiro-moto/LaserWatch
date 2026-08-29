@@ -225,6 +225,18 @@ LaserWatch/
 └── test_*.py
 ```
 
+## Disclaimer
+
+LaserWatch is research software provided **“as is”**, without warranty of any kind, express or implied. The authors and contributors do not guarantee the correctness, accuracy, reliability, availability, fitness for a particular purpose, or suitability of the software or of any measurement result produced with it.
+
+To the maximum extent permitted by applicable law, the authors and contributors shall not be liable for any direct, indirect, incidental, special, consequential, or other loss or damage arising from the use of, inability to use, or reliance on this software, including but not limited to equipment damage, sensor damage, data loss, loss of research time, or incorrect measurement results.
+
+Users are solely responsible for validating LaserWatch, its configuration, calibration, camera behavior, and measurement results for their intended application before relying on them.
+
+**LaserWatch does not provide laser-safety functions.** Appropriate laser-safety procedures, protective equipment, interlocks, beam containment, sensor protection, and compliance with applicable institutional and legal safety requirements must be implemented independently by the user.
+
+The terms of the [MIT License](LICENSE) also apply.
+
 ## License
 
 LaserWatch is released under the [MIT License](LICENSE).
